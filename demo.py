@@ -10,6 +10,7 @@ import math
 import argparse
 import numpy as np
 from PIL import Image, ImageDraw
+from tqdm import tqdm
 import __init_paths
 from face_enhancement import FaceEnhancement
 from face_colorization import FaceColorization
@@ -100,26 +101,36 @@ if __name__=='__main__':
         processer = Segmentation2Face(in_size=args.in_size, model=args.model, is_norm=False, device='cuda' if args.use_cuda else 'cpu')
 
 
-    files = sorted(glob.glob(os.path.join(args.indir, '*.*g')))
-    for n, file in enumerate(files[:]):
-        filename = os.path.basename(file)
-        
-        img = cv2.imread(file, cv2.IMREAD_COLOR) # BGR
-        if not isinstance(img, np.ndarray): print(filename, 'error'); continue
-        #img = cv2.resize(img, (0,0), fx=2, fy=2) # optional
+    videos = sorted(os.listdir(args.indir))
+    for v in tqdm(videos, leave=False):
+        frames = sorted(os.listdir(os.path.join(args.indir, v)))
+        os.makedirs(os.path.join(args.outdir, v), exist_ok=True)
+        # files = sorted(glob.glob(os.path.join(args.indir, '*.*g')))
+        # for n, file in enumerate(files[:]):
+        for frame in tqdm(frames, desc=v):
+            file = os.path.join(args.indir, v, frame)
+            filename = os.path.basename(file)
+            
+            img = cv2.imread(file, cv2.IMREAD_COLOR) # BGR
+            h, w, _ = img.shape
+            if h * 2 == w:
+                img = img[:, w//2:, :]
+            if not isinstance(img, np.ndarray): print(filename, 'error'); continue
+            #img = cv2.resize(img, (0,0), fx=2, fy=2) # optional
 
-        if args.task == 'FaceInpainting':
-            img = np.asarray(brush_stroke_mask(Image.fromarray(img)))
+            if args.task == 'FaceInpainting':
+                img = np.asarray(brush_stroke_mask(Image.fromarray(img)))
 
-        img_out, orig_faces, enhanced_faces = processer.process(img, aligned=args.aligned)
-        
-        img = cv2.resize(img, img_out.shape[:2][::-1])
-        cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_COMP.jpg'), np.hstack((img, img_out)))
-        cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_GPEN.jpg'), img_out)
-        
-        if args.save_face:
-            for m, (ef, of) in enumerate(zip(enhanced_faces, orig_faces)):
-                of = cv2.resize(of, ef.shape[:2])
-                cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_face%02d'%m+'.jpg'), np.hstack((of, ef)))
-        
-        if n%10==0: print(n, filename)
+            img_out, orig_faces, enhanced_faces = processer.process(img, aligned=args.aligned)
+            
+            img = cv2.resize(img, img_out.shape[:2][::-1])
+            # cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_COMP.jpg'), np.hstack((img, img_out)))
+            # cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_GPEN.jpg'), img_out)
+            cv2.imwrite(os.path.join(args.outdir, v, frame), img_out)
+            
+            # if args.save_face:
+            #     for m, (ef, of) in enumerate(zip(enhanced_faces, orig_faces)):
+            #         of = cv2.resize(of, ef.shape[:2])
+            #         cv2.imwrite(os.path.join(args.outdir, '.'.join(filename.split('.')[:-1])+'_face%02d'%m+'.jpg'), np.hstack((of, ef)))
+            
+            # if n%10==0: print(n, filename)
